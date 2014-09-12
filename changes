@@ -1,0 +1,16 @@
+#!/bin/sh
+
+changes() {
+    chsum1=`sha512sum $1 | awk '{print $1}'`
+    chsum2=$chsum1
+
+    while [ "$chsum1" = "$chsum2" ]
+    do
+        sleep 10
+        chsum2=`sha512sum $1 | awk '{print $1}'`
+    done
+
+    more $1 | grep -e NB-AN -e FINAL | mail -s "Changes" lajoie.marcandre@gmail.com
+}
+
+check $*

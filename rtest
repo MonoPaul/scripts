@@ -1,0 +1,150 @@
+#!/bin/sh
+Version='32'
+Thisprog="`basename $0`"
+if [ "$Thisprog" = 'rprism' ] ;  then
+   Dir=$HOME'/Dragon/Prism/' ;
+   Prog='prism' ;
+elif [ "$Thisprog" = 'rsphere' ] ; then
+   Dir=$HOME'/Dragon/Sphere/' ;
+   Prog='sphere' ;
+   Version='' ;
+else
+   echo 'Not a valid call to program rtest using :' $Thisprog ;
+   exit 1;
+fi
+
+Matlab='no'
+Mpi=''
+Ncor=''
+namefile=''
+if [ $# = 0 ]; then
+  echo "Usage :" $Thisprog "[file]"
+  exit 1;
+fi
+for param in $*
+do
+    case $param in
+	-m)    Matlab='yes' ;;
+	-o)    Octave='yes' ;
+               Matlab='yes' ;;
+	-f)    Open='yes' ;;
+	-w)    Opt='-w' ;;
+	-mpi*) Mpi='-mpi'`echo $param | cut -c 5-` ;
+               Version='mpi' ;;
+	-omp*) Omp='yes' ;
+	       Ncor=`echo $param | cut -c 5-` ;;
+	-32)   Version='32' ;;
+	-64)   Version='64' ;;
+	-32omp)   Version='32omp' ;;
+	-v*)   Version=`echo $1 | cut -c 3-` ;;
+	*)     if [ -f $1 ]; then
+                 namefile="$namefile $1"
+               elif [ -f ${1}.x2m ]; then
+	         namefile="$namefile $1.x2m"
+	       else
+	         echo "This file does not exist :" $1
+	         exit 1
+	       fi ;;
+    esac
+    shift
+done
+echo 'Running test '$Thisprog' with file: ' $namefile
+
+#if [ -e $namefile+ ] ; then
+#   echo 'Removing previous '$namefile'+* output files...'
+#   rm $namefile+*
+#fi
+#if [ -e $namefile- ] ; then
+#   echo  'Removing previous '$namefile'-* output files...'
+#   rm $namefile-*
+#fi
+
+#Link bit-compatible cross-section libraries
+System=`uname`
+if [ $System = 'Linux' ]; then
+#    echo $Version
+    if [ $Version -ne '32' ]; then
+	System=Linux64
+    fi
+    for FullNAME in /scratch/A02171/Dragon/libraries/libraries$System/*
+    do
+#	echo $FullNAME
+	LocalNAME="`basename $FullNAME`"
+	ln -s  $FullNAME /scratch/A02171/Dragon/libraries/$LocalNAME
+    done
+fi
+
+#if [ "$Omp" = 'yes' ] ; then
+#  export OMP_NUM_THREADS=$Ncor
+#else
+#  export OMP_NUM_THREADS=2
+#fi
+#export OMP_NESTED=true
+#echo "Omp num threads "$OMP_NUM_THREADS
+cd $Dir
+make $Version
+cd $OLDPWD
+rdragon $Mpi $Opt -n$Prog$Version $namefile
+
+if [ `uname` = 'Linux' ]; then
+    for FullNAME in /scratch/A02171/Dragon/libraries/libraries$System/*
+    do
+	rm /scratch/A02171/Dragon/libraries/"`basename $FullNAME`"
+    done
+fi
+#if [ -e $namefile+DUMMYSQ ] ; then
+#   rm $namefile+DUMMYSQ
+#   echo '*****'
+#   echo '* Problem during DRAGON execution'
+#   echo '*****'
+#   Matlab='no'
+#fi
+
+
+#if [ -e $namefile+TRKBIN ]; then rm $namefile+TRKBIN; fi
+
+if [ "$Open" = 'yes' ] ; then
+   if [ -e $namefile+ ] ; then 
+      emacs $namefile+ &
+   elif [ -e $namefile- ] ; then
+      emacs $namefile- &
+   fi
+fi
+
+if [ "$Matlab" = 'yes' ] ; then
+   if [ -e Matlab.m ] ; then rm Matlab.m; fi
+   if [ -e $namefile+MATLABFIL ] ; then 
+#      echo 'A=figure ;' > Matlab.m
+#      if [ "$Octave" = 'yes' ] ; then
+#         echo "__gnuplot_set__ terminal png size 1000,1000 ;" > Matlab.m
+#         grep -v pause $namefile+MATLABFIL | grep -v xmin | grep -v xmax | grep -v figure | sed 's/line/plot/' | grep -v set | sed 's/xx=//' | awk '{if($1=="idreg="){print $1 "\""$2%6+1"\""";"} else {print}}' | sed 's/)]);/)],idreg);/' >> Matlab.m
+#         echo "__gnuplot_set__ output '$namefile+.png' ; replot ;" >> Matlab.m
+#      else
+#      echo 'figure;' >> Matlab.m
+      grep -v pause $namefile+MATLABFIL >> Matlab.m
+      echo 'axis equal;' >> Matlab.m
+#      echo "print(A,'-depsc','"$namefile+.eps"');" >> Matlab.m
+#      fi
+#      echo 'pause;' >> Matlab.m
+   fi
+   if [ -e $namefile+fort.8 ] ; then
+#      echo "A=figure ;" > Matlab.m
+      cat $namefile+fort.8 >> Matlab.m
+      echo 'axis equal;' >> Matlab.m
+#      echo "print(A,'-depsc','"$namefile+.eps"');" >> Matlab.m
+#      echo 'pause;' >> Matlab.m
+   fi
+   if [ ! -e Matlab.m ] ; then
+      echo 'output must be ' $namefile+MATLABFIL ' or ' $namefile+fort.8 ;
+      exit 1 ;
+   fi
+   echo 'pause; exit;' >> Matlab.m
+   if [ "$Octave" = 'yes' ] ; then
+      octave Matlab.m > /dev/null
+   else
+      matlab -nodesktop -nosplash -r Matlab > /dev/null
+   fi
+#   rm Matlab.m
+#   evince $namefile\+.eps
+fi
+exit 0;
