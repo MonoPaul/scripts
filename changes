@@ -13,4 +13,4 @@ changes() {
     more $1 | grep -e NB-AN -e FINAL | mail -s "Changes" lajoie.marcandre@gmail.com
 }
 
-check $*
+changes $*
